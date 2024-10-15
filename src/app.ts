@@ -40,7 +40,10 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
             } else {
                 if (ctx.body === '0') { ctxFn.gotoFlow(menuFlow); }
                 switch (user.actualMenu) {
-                    case '1': sendProductMessage(user.thread, ctx.body).then(answer => {
+                    case '1': 
+                    if (user.status === 'pending') {
+                        ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
+                        sendProductMessage(user.thread, ctx.body).then(answer => {
                         runAssistant(user.thread).then(run => {
                             const runId = run.id;
 
@@ -49,7 +52,10 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
                                 checkingStatus(ctxFn, user, runId);
                             }, 2000);
                         });
-                    });
+                    });} else {
+                        ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
+                    }
+                    
                         break;
                     case '2':
                         ctxFn.flowDynamic('AUN NO TENEMOS DATOS DE SOPORTE');
@@ -158,7 +164,7 @@ async function checkingStatus(ctxFn, user, runId) {
     // console.log(runObject)
     console.log('Current status: ' + user.status);
 
-    if (user.status == 'completed') { revizar status inicial para que no se repita el error
+    if (user.status == 'completed') { 
         clearInterval(pollingInterval);
 
         const messagesList = await openai.beta.threads.messages.list(user.thread);
@@ -172,11 +178,13 @@ async function checkingStatus(ctxFn, user, runId) {
         // console.log('Message: ' + message);
         // console.log(message.text.value);
         ctxFn.flowDynamic(message.text.value);
-
+        await ctxFn.flowDynamic('Para regresar al *Menú* escriba *0*.');
+        user.status = 'pending';
         //return messages;
     } else if (['failed', 'cancelled', 'expired'].includes(status)) {
         clearInterval(pollingInterval);
-        ctxFn.flowDynamic(`Error: ${status}, por favor intentelo de nuevo.`);
+        ctxFn.flowDynamic(`Error: ${user.status}, por favor intentelo de nuevo.`);
+        user.status = 'pending';
     }
 }
 const main = async () => {
