@@ -58,7 +58,7 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
                                 });
                             });
                         } else {
-                            ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
+                            ctxFn.flowDynamic('Procesando su consulta anterior...');
                         }
 
                         break;
