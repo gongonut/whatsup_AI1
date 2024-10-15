@@ -24,6 +24,10 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
     .addAction(
         async (ctx, ctxFn) => {
+            if (process.env.NODE_STATUS === 'stopped') {
+                ctxFn.flowDynamic('Servidor apagado');
+                return;
+            }
             const user = userQueues.find(u => u.from === ctx.from);
             if (!user) {
                 // userQueues.set(ctx.from, { ...ctx, ...{ menuStatus: 0 } });
@@ -40,22 +44,23 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
             } else {
                 if (ctx.body === '0') { ctxFn.gotoFlow(menuFlow); }
                 switch (user.actualMenu) {
-                    case '1': 
-                    if (user.status === 'pending') {
-                        ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
-                        sendProductMessage(user.thread, ctx.body).then(answer => {
-                        runAssistant(user.thread).then(run => {
-                            const runId = run.id;
+                    case '1':
+                        if (user.status === 'pending') {
+                            ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
+                            sendProductMessage(user.thread, ctx.body).then(answer => {
+                                runAssistant(user.thread).then(run => {
+                                    const runId = run.id;
 
-                            // Check the status
-                            pollingInterval = setInterval(() => {
-                                checkingStatus(ctxFn, user, runId);
-                            }, 2000);
-                        });
-                    });} else {
-                        ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
-                    }
-                    
+                                    // Check the status
+                                    pollingInterval = setInterval(() => {
+                                        checkingStatus(ctxFn, user, runId);
+                                    }, 2000);
+                                });
+                            });
+                        } else {
+                            ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
+                        }
+
                         break;
                     case '2':
                         ctxFn.flowDynamic('AUN NO TENEMOS DATOS DE SOPORTE');
@@ -164,7 +169,7 @@ async function checkingStatus(ctxFn, user, runId) {
     // console.log(runObject)
     console.log('Current status: ' + user.status);
 
-    if (user.status == 'completed') { 
+    if (user.status == 'completed') {
         clearInterval(pollingInterval);
 
         const messagesList = await openai.beta.threads.messages.list(user.thread);
