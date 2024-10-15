@@ -181,7 +181,7 @@ async function checkingStatus(ctxFn, user, runId) {
         await ctxFn.flowDynamic('Para regresar al *Menú* escriba *0*.');
         user.status = 'pending';
         //return messages;
-    } else if (['failed', 'cancelled', 'expired'].includes(status)) {
+    } else if (['failed', 'cancelled', 'expired'].includes(user.status)) {
         clearInterval(pollingInterval);
         ctxFn.flowDynamic(`Error: ${user.status}, por favor intentelo de nuevo.`);
         user.status = 'pending';
