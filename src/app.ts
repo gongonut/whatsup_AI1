@@ -8,14 +8,17 @@ import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
 interface UserQueue {
     from: string;
     thread: string;
+    runId?: string;
     ctx: any;
     actualMenu: string;
     status: string;
+    idleStep: number;
+    messagetimestamp: number;
     messages: { role: string, content: string, time: number }[]
 }
 
 const PORT = process.env.PORT ?? 3008
-const { ASSISTANT_ID, OPENAI_API_KEY } = process.env;
+const { ASSISTANT_ID, OPENAI_API_KEY, IDLE_MINUTES} = process.env;
 const userQueues: UserQueue[] = [];
 let pollingInterval;
 // setup OpenAI client
@@ -28,6 +31,7 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
                 ctxFn.flowDynamic('Servidor apagado');
                 return;
             }
+            
             const user = userQueues.find(u => u.from === ctx.from);
             if (!user) {
                 // userQueues.set(ctx.from, { ...ctx, ...{ menuStatus: 0 } });
@@ -38,6 +42,8 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
                     ctx,
                     actualMenu: 'NONE',
                     status: 'pending',
+                    idleStep: 0,
+                    messagetimestamp: Date.now(),
                     messages: [{ role: "user", content: ctx.body, time: Date.now() }],
                 });
                 ctxFn.gotoFlow(welcomeFlow);
@@ -46,19 +52,22 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
                 switch (user.actualMenu) {
                     case '1':
                         if (user.status === 'pending') {
+                            user.status = 'starting';
                             ctxFn.flowDynamic('Un momento por favor, estamos procesando su consulta...');
                             sendProductMessage(user.thread, ctx.body).then(answer => {
                                 runAssistant(user.thread).then(run => {
-                                    const runId = run.id;
+                                    user.runId = run.id;
 
                                     // Check the status
                                     pollingInterval = setInterval(() => {
-                                        checkingStatus(ctxFn, user, runId);
+                                        checkingStatus(ctxFn, user, user.runId);
                                     }, 2000);
                                 });
                             });
                         } else {
-                            ctxFn.flowDynamic('Procesando su consulta anterior...');
+                            // openai.beta.threads.runs.cancel(user.thread, user.runId);
+                            // ctxFn.flowDynamic('Cancelando consulta anterior... Por favor escriba su nueva consulta');
+                            ctxFn.gotoFlow(pendingFlow);
                         }
 
                         break;
@@ -70,6 +79,9 @@ const defaultFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
 
         }
     )
+
+const pendingFlow = addKeyword<Provider, Database>(EVENTS.ACTION)
+    .addAnswer('Procesando consulta anterior, espere por favor...')
 
 const welcomeFlow = addKeyword<Provider, Database>(EVENTS.ACTION)
     .addAnswer(`Hola, bienvenido a *Cyber Cloud*`, { media: 'https://static.wixstatic.com/media/82643f_e3ce633fe3dd4190bc3f59047d7517a9~mv2.jpg/v1/fill/w_193,h_79,al_c,q_80,usm_0.66_1.00_0.01,enc_auto/SYT%20logo-02.jpg' })
@@ -83,7 +95,7 @@ const menuFlow = addKeyword<Provider, Database>(EVENTS.ACTION)
                     1. Nuestros productos IA.
                     2. Soporte IA.
                     3. Contactar con un asesor.
-                    M. Regresar al *Menú*.
+                    0. Regresar al *Menú*.
                     E. Finalizar conversación.`, { capture: true },
         async (ctx, ctxFn) => {
             if (!['1', '2', '3', 'E'].includes(ctx.body[0])) { ctxFn.gotoFlow(menuFlow); }
@@ -193,7 +205,7 @@ async function checkingStatus(ctxFn, user, runId) {
     }
 }
 const main = async () => {
-    const adapterFlow = createFlow([defaultFlow, welcomeFlow, menuFlow])
+    const adapterFlow = createFlow([defaultFlow, welcomeFlow, menuFlow, pendingFlow])
 
     const adapterProvider = createProvider(Provider)
     const adapterDB = new Database()
@@ -204,6 +216,12 @@ const main = async () => {
         database: adapterDB,
     })
 
+    adapterProvider.on('message', ({ body, from }) => {
+        console.log(`Message Payload:`, { body, from })
+        handleCtx(body, from)
+    })
+
+    /*
     adapterProvider.server.post(
         '/v1/messages',
         handleCtx(async (bot, req, res) => {
@@ -242,6 +260,7 @@ const main = async () => {
             return res.end(JSON.stringify({ status: 'ok', number, intent }))
         })
     )
+        */
 
     httpServer(+PORT)
 }
