@@ -216,10 +216,12 @@ const main = async () => {
         database: adapterDB,
     })
 
+    /*
     adapterProvider.on('message', ({ body, from }) => {
         console.log(`Message Payload:`, { body, from })
         handleCtx(body, from)
     })
+        */
 
     /*
     adapterProvider.server.post(
